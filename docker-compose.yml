@@ -1,0 +1,51 @@
+services:
+  # Builder service with pre-cached dependencies
+  builder:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      tags:
+        - flux-builder:latest
+    image: flux-builder:latest
+    volumes:
+      - .:/workspace
+      - ccache:/ccache
+    environment:
+      - CCACHE_DIR=/ccache
+      - CCACHE_MAXSIZE=2G
+    command: ./scripts/build.sh
+
+  # Test service (runs after build)
+  test:
+    image: flux-builder:latest
+    volumes:
+      - .:/workspace
+      - ccache:/ccache
+    environment:
+      - CCACHE_DIR=/ccache
+      - DISPLAY=:99
+    command: >
+      sh -c "
+        Xvfb :99 -screen 0 1280x1024x24 &
+        sleep 1
+        ./scripts/test.sh
+      "
+
+  # Interactive shell for development
+  shell:
+    image: flux-builder:latest
+    volumes:
+      - .:/workspace
+      - ccache:/ccache
+      - deps-juce:/deps/juce
+      - deps-tracktion:/deps/tracktion_engine
+    environment:
+      - CCACHE_DIR=/ccache
+    stdin_open: true
+    tty: true
+    command: /bin/bash
+
+volumes:
+  ccache:
+  deps-juce:
+  deps-tracktion:

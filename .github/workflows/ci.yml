@@ -1,0 +1,157 @@
+name: FLUX CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Fast Docker-based build (recommended)
+  build-linux-docker:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Cache Docker layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-docker-${{ hashFiles('Dockerfile', '**/CMakeLists.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-docker-
+
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: /tmp/ccache
+          key: ${{ runner.os }}-ccache-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-ccache-
+
+      - name: Build Docker image
+        run: |
+          docker build -t flux-builder:latest \
+            --cache-from type=local,src=/tmp/.buildx-cache \
+            --cache-to type=local,dest=/tmp/.buildx-cache-new,mode=max \
+            -f Dockerfile .
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache || true
+
+      - name: Build FLUX in Docker
+        run: |
+          docker run --rm \
+            -v $(pwd):/workspace \
+            -v /tmp/ccache:/ccache \
+            -e CCACHE_DIR=/ccache \
+            -e CCACHE_MAXSIZE=2G \
+            flux-builder:latest \
+            bash -c "
+              cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release &&
+              cmake --build build --parallel 4
+            "
+
+      - name: Run tests in Docker
+        run: |
+          docker run --rm \
+            -v $(pwd):/workspace \
+            -v /tmp/ccache:/ccache \
+            -e CCACHE_DIR=/ccache \
+            -e DISPLAY=:99 \
+            flux-builder:latest \
+            bash -c "
+              Xvfb :99 -screen 0 1280x1024x24 &
+              sleep 1
+              cd /workspace/build && ctest --output-on-failure
+            "
+
+      - name: Run GUI smoke test (xvfb in Docker)
+        run: |
+          docker run --rm \
+            -v $(pwd):/workspace \
+            -e DISPLAY=:99 \
+            flux-builder:latest \
+            bash -c "
+              Xvfb :99 -screen 0 1280x1024x24 &
+              sleep 1
+              /workspace/build/FLUX_artefacts/Release/FLUX --smoke-test
+            "
+
+  # Alternative: Native build with ccache (slower but no Docker)
+  build-linux-native:
+    runs-on: ubuntu-24.04
+    if: false  # Disabled by default, enable if Docker fails
+
+    strategy:
+      matrix:
+        build_type: [Release]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: ./setup.sh
+
+      - name: Setup ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ${{ runner.os }}-${{ matrix.build_type }}-${{ hashFiles('**/CMakeLists.txt', '**/cmake/*.cmake') }}
+          max-size: 2G
+
+      - name: Configure CMake
+        run: |
+          cmake -B build \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Run unit tests
+        run: |
+          cd build
+          ctest --output-on-failure --parallel 4
+
+      - name: Run GUI smoke test (xvfb)
+        run: |
+          xvfb-run -a --server-args="-screen 0 1280x1024x24" \
+            ./build/FLUX_artefacts/${{ matrix.build_type }}/FLUX --smoke-test
+
+  # Optional: Build on macOS (commented out to save CI minutes)
+  # build-macos:
+  #   runs-on: macos-14
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - name: Install dependencies
+  #       run: brew install cmake ninja
+  #     - name: Build
+  #       run: |
+  #         cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+  #         cmake --build build
+  #     - name: Test
+  #       run: ctest --test-dir build --output-on-failure
+
+  # Optional: Build on Windows (commented out to save CI minutes)
+  # build-windows:
+  #   runs-on: windows-2022
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - name: Build
+  #       shell: cmd
+  #       run: |
+  #         cmake -B build -G "Visual Studio 17 2022" -A x64
+  #         cmake --build build --config Release
+  #     - name: Test
+  #       run: ctest --test-dir build --output-on-failure -C Release
