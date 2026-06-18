@@ -1,10 +1,15 @@
 # FLUX Tests
 
-# Test executable
-add_executable(flux_tests
-  test_main.cpp
-  test_render_smoke.cpp
-  test_gui_smoke.cpp
+# Test executable - includes engine sources needed for tests
+target_sources(flux_tests
+  PRIVATE
+    test_main.cpp
+    test_render_smoke.cpp
+    test_gui_smoke.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/EngineWrapper.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/EngineWrapper.h
+    ${CMAKE_SOURCE_DIR}/src/engine/EditController.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/EditController.h
 )
 
 target_include_directories(flux_tests

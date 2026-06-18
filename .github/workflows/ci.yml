@@ -40,9 +40,10 @@ jobs:
 
       - name: Build Docker image
         run: |
-          docker build -t flux-builder:latest \
+          docker buildx build -t flux-builder:latest \
             --cache-from type=local,src=/tmp/.buildx-cache \
             --cache-to type=local,dest=/tmp/.buildx-cache-new,mode=max \
+            --load \
             -f Dockerfile .
           rm -rf /tmp/.buildx-cache
           mv /tmp/.buildx-cache-new /tmp/.buildx-cache || true

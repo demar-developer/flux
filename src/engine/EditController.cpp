@@ -84,15 +84,8 @@ bool EditController::renderToFile(const juce::File& outputFile,
   tracktion::engine::Renderer::Parameters params(
       *edit_, tracktion::engine::TrackMuteState(*edit_, false));
 
-  // Set output file
-  juce::FileOutputStream* stream = new juce::FileOutputStream(outputFile);
-  if (stream->failedToOpen()) {
-    error = "Failed to open output file: " + outputFile.getFullPathName();
-    delete stream;
-    return false;
-  }
-
   // Configure the render
+  // NOTE: Renderer::renderToFile handles file creation internally
   params.destFile = outputFile;
   params.bitDepth = 16;
   params.sampleRate = 44100;
