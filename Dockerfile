@@ -45,15 +45,11 @@ RUN mkdir -p /ccache
 # Working directory for pre-building deps
 WORKDIR /deps
 
-# Pre-fetch and build JUCE 8.0.13 (commit 7c9d378)
-RUN git clone --depth 1 --branch 8.0.13 https://github.com/juce-framework/JUCE.git juce && \
-    cd juce && \
-    git checkout 7c9d378
+# Pre-fetch JUCE 8.0.13 (tag 8.0.13)
+RUN git clone --depth 1 --branch 8.0.13 https://github.com/juce-framework/JUCE.git juce
 
-# Pre-fetch Tracktion Engine v3.2.0 (commit 0a5f4e6)
-RUN git clone --depth 1 https://github.com/Tracktion/tracktion_engine.git && \
-    cd tracktion_engine && \
-    git checkout 0a5f4e6a5f53d09c89b414a44386a12df7fa1ec6
+# Pre-fetch Tracktion Engine v3.2.0 (tag v3.2.0)
+RUN git clone --depth 1 --branch v3.2.0 https://github.com/Tracktion/tracktion_engine.git
 
 # Create a dummy CMake project to pre-build the dependencies
 COPY docker/prebuild.cmake /deps/CMakeLists.txt
